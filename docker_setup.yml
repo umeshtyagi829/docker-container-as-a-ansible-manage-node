@@ -1,0 +1,60 @@
+- hosts: manage-node
+  gather_facts: no
+  vars_prompt:
+    - name: c_name
+      prompt: Enter container 
+      private: no
+  tasks:
+    - name: installing packages
+      package: 
+        name:     
+              - yum-utils
+              - lvm2
+              - device-mapper-persistent-data
+        state: latest
+
+    - name: docker repo
+      yum_repository:
+       name: docker
+       description: docker repository
+       file: docker
+       baseurl: "https://download.docker.com/linux/centos/7/x86_64/stable/"
+       enabled: yes
+
+    - name: "Installing docker ....."
+      shell: "yum install docker-ce --nobest -y"
+
+    - name: starting docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+      become: yes
+
+    - name: installing docker-py
+      shell: "pip3 install docker-py"
+
+    - name: pullin own image(ssh-enabled)
+      docker_image:
+        name: 1703706/centos-with-ssh:latest
+        source: pull
+
+    - name: creating a docker container
+      docker_container:
+         name: "{{ c_name }}"
+         image: 1703706/centos-with-ssh:latest
+         state: started
+         tty: yes
+         detach: yes
+
+    - name: retrieving the ip 
+      docker_container_info:
+        name: "{{ c_name }}"
+      register: res
+
+    - name: configuring the ip
+      blockinfile:
+        path: /etc/ansible/hosts
+        block: |
+          [docker_container]
+          {{  res.container.NetworkSettings.IPAddress }} ansible_user=root ansible_ssh_pass=root ansible_connection=ssh 
